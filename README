@@ -1,0 +1,79 @@
+# Projet Thumalien – Détection de Fake News sur Bluesky
+
+## 1. But du projet
+
+Ce projet a pour objectif de développer un **pipeline d’analyse automatisée des messages publiés sur Bluesky** afin de :
+
+- Collecter les posts contenant des contenus douteux ou trompeurs (ex. : "fake news") en français et en anglais.
+- Stocker les données brutes dans une base MongoDB.
+- Préparer les données pour des étapes ultérieures d’analyse NLP : classification fake news, analyse émotionnelle et dashboard.
+- Assurer la traçabilité des données via des timestamps et la gestion des doublons.
+- Mettre en place un pipeline stable, idempotent et conforme aux bonnes pratiques (Green IT).
+
+---
+
+## 2. Étapes principales du projet
+
+1. **Collecte des données** :  
+   - Authentification à l’API Bluesky via un compte utilisateur.
+   - Recherche de posts contenant le mot-clé "fake news".
+   - Filtrage des posts selon la langue (FR/EN).
+   - Ajout de métadonnées : timestamp d’ingestion, métriques, source.
+2. **Stockage** :  
+   - Les données brutes sont stockées dans MongoDB (`raw_posts`) avec gestion des doublons.
+3. **Prétraitement et analyse** (non inclus dans `collect.py`) :  
+   - Nettoyage des textes, tokenisation et création d’embeddings pour classification et analyse émotionnelle.
+4. **Exploitation des données** :  
+   - Visualisation via un dashboard (Streamlit ou autre).
+   - Analyse de la propagation des fake news et de l’impact émotionnel.
+
+---
+
+## 3. Fichiers présents
+
+| Fichier | Description |
+|---------|------------|
+| `collect.py` | Script principal de collecte des posts depuis Bluesky et insertion dans MongoDB. |
+| `.env` | Contient les identifiants Bluesky (`BLUESKY_HANDLE`, `BLUESKY_PASSWORD`). À créer localement. |
+| `Cahier des charges - Projet Etude - M1 - DA - 2025.docx` | Document décrivant le contexte, objectifs, organisation et livrables du projet. |
+| `modalité.pdf` | Document décrivant les modalités de rendu et d’évaluation du projet. |
+| `grille d'évaluation.pdf` | Critères de notation pour la soutenance et le livrable. |
+
+---
+
+## 4. Prérequis
+
+- Python 3.10+  
+- MongoDB installé sur la machine (ou via Docker)  
+- Bibliothèques Python :
+```bash
+  pip install requests python-dotenv langdetect pymongo
+  ```
+
+## 5. Comment faire fonctionner le projet
+
+### 5.1. Lancer MongoDB
+
+Si ce n'est pas fait, créez un dossier pour stocker les données : 
+```bash
+mkdir -p ~/mongodb-data
+```
+
+Puis lancer MongoDB avec ce dossier, laisser ce terminal ouvert pour que MongoDB reste actif : 
+```bash
+mongod --dbpath ~/mongodb-data
+```
+
+### 5.2. Exécuter le script de collecte
+
+Lancer le script Python dans un nouveau terminal:
+```bash
+python collect.py
+```
+
+Vérifier que les posts ont bien été insérés dans MongoDB : 
+```bash
+mongosh
+use fake_news_project
+db.raw_posts.countDocuments()
+```
