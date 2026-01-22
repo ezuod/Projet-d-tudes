@@ -2,9 +2,10 @@ import requests
 import os
 from dotenv import load_dotenv
 from langdetect import detect, LangDetectException
-from pymongo import MongoClient
 from datetime import datetime, timezone
 from pymongo.errors import BulkWriteError
+import psycopg2
+from psycopg2.extras import execute_batch
 
 
 load_dotenv()
@@ -90,36 +91,49 @@ def filter_language(posts, allowed=("fr", "en")):
 
     return filtered
 
-
-def store_posts(posts, collection):
+def store_posts(posts, conn):
     if not posts:
         return
 
-    try:
-        result = collection.insert_many(posts, ordered=False)
-        print(f"{len(result.inserted_ids)} posts insérés")
+    query = """
+        INSERT INTO raw_posts (
+            uri, cid, author, text, lang,
+            created_at, ingested_at,
+            like_count, repost_count, reply_count,
+            source
+        )
+        VALUES (
+            %(uri)s, %(cid)s, %(author)s, %(text)s, %(lang)s,
+            %(created_at)s, %(ingested_at)s,
+            %(like_count)s, %(repost_count)s, %(reply_count)s,
+            %(source)s
+        )
+        ON CONFLICT (uri) DO NOTHING;
+    """
 
-    except BulkWriteError as e:
-        inserted = e.details.get("nInserted", 0)
-        print(f"{inserted} posts insérés, doublons ignorés")
+    with conn.cursor() as cursor:
+        execute_batch(cursor, query, posts)
+        conn.commit()
 
+    print(f"{len(posts)} posts traités (doublons ignorés)")
 
 def init_bluesky_session():
     session = create_session()
     return session["accessJwt"]
 
-def init_mongodb():
-    client = MongoClient("mongodb://localhost:27017")
-    db = client["fake_news_project"]
-    collection = db["raw_posts"]
+def init_postgres():
+    conn = psycopg2.connect(
+        host="localhost",
+        port=5432,
+        dbname="fake_news_project",
+        user="postgres",
+        password="16122003"
+    )
+    return conn
 
-    # Index unique pour éviter les doublons
-    collection.create_index("uri", unique=True)
-
-    return collection
 
 
-def run_pipeline(collection):
+def run_pipeline(conn):
     raw_posts = search_posts(
         query="fake news",
         limit=50,
@@ -127,17 +141,12 @@ def run_pipeline(collection):
     )
 
     clean_posts = filter_language(raw_posts)
+    store_posts(clean_posts, conn)
 
-    store_posts(clean_posts, collection)
-
-    print("Pipeline terminée avec succès")
+    print("Pipeline terminé avec succès")
 
 if __name__ == "__main__":
-    # Authentification Bluesky
     ACCESS_TOKEN = init_bluesky_session()
-
-    # Connexion MongoDB
-    collection = init_mongodb()
-
-    # Lancement pipeline
-    run_pipeline(collection)
+    conn = init_postgres()
+    run_pipeline(conn)
+    conn.close()
