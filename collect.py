@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 from langdetect import detect, LangDetectException
 from datetime import datetime, timezone
-from pymongo.errors import BulkWriteError
+from pymongo.errors import BulkWriteError # pas encore utilisé
 import psycopg2
 from psycopg2.extras import execute_batch
 
