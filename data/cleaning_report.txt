@@ -1,0 +1,51 @@
+=== Preprocessing demarre : 2026-02-12T15:05:36.810435 ===
+
+--- Etape 0 : Chargement des datasets ---
+#1 ISOT : 44898 articles (fake=23481, real=21417)
+#2 Mehul : 6335 articles (fake=3164, real=3171)
+#5 Ronik : 20800 articles (fake=10413, real=10387)
+#3 Sahide : EXCLU (synthetique, 1k lignes, bilingue EN/TR)
+#4 Vishal : EXCLU (doublon du #1)
+
+--- Etape 1 : Merge ---
+Total apres merge : 72033 articles
+  Fake : 37058
+  Real : 34975
+
+--- Etape 2 : Suppression des nulls ---
+0 lignes null/vides supprimees
+Restant : 72033
+
+--- Etape 3 : Suppression des labels contradictoires ---
+0 lignes avec labels contradictoires supprimees (0 textes uniques)
+Restant : 72033
+
+--- Etape 4 : Deduplication ---
+8458 doublons supprimes
+Restant : 63575
+
+--- Etape 5 : Suppression des textes < 100 chars ---
+661 textes courts supprimes
+Restant : 62914
+
+--- Etape 6 : Nettoyage du texte ---
+Nettoyage applique (URLs, HTML, Reuters, boilerplate...)
+
+--- Etape 7 : Re-filtrage post-nettoyage ---
+42 textes devenus trop courts apres nettoyage
+Restant : 62872
+
+--- Etape 8 : Verification de l'equilibre ---
+Fake : 28143 (44.8%)
+Real : 34729 (55.2%)
+OK : equilibre acceptable
+
+--- Etape 9 : Export dataset nettoye ---
+Dataset nettoye : /home/loann/projects/Projet-d-tudes/data/dataset_clean.csv (62872 lignes)
+
+--- Etape 10 : Split train/val/test (80/10/10) ---
+Train : 50297 lignes (fake=22514, real=27783)
+Val : 6287 lignes (fake=2814, real=3473)
+Test : 6288 lignes (fake=2815, real=3473)
+
+=== Preprocessing termine : 2026-02-12T15:05:56.496143 ===
