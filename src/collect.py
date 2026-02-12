@@ -3,8 +3,10 @@ import os
 from dotenv import load_dotenv
 from langdetect import detect, LangDetectException
 from datetime import datetime, timezone
-import psycopg2
 from psycopg2.extras import execute_batch
+import psycopg2
+
+from db import get_connection
 
 load_dotenv()
 
@@ -132,17 +134,6 @@ def init_bluesky_session():
     return session["accessJwt"]
 
 
-def init_postgres():
-    conn = psycopg2.connect(
-        host=os.getenv("POSTGRES_HOST", "localhost"),
-        port=int(os.getenv("POSTGRES_PORT", "5432")),
-        dbname=os.getenv("POSTGRES_DB", "fake_news_project"),
-        user=os.getenv("POSTGRES_USER"),
-        password=os.getenv("POSTGRES_PASSWORD"),
-    )
-    return conn
-
-
 def run_pipeline(access_token, conn):
     print("Demarrage de la collecte...")
 
@@ -158,7 +149,7 @@ def run_pipeline(access_token, conn):
 
 if __name__ == "__main__":
     token = init_bluesky_session()
-    conn = init_postgres()
+    conn = get_connection()
     try:
         run_pipeline(token, conn)
     finally:
