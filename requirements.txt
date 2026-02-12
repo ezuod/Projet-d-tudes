@@ -1,0 +1,4 @@
+requests
+python-dotenv
+langdetect
+psycopg2-binary
