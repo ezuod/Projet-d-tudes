@@ -3,31 +3,29 @@ import os
 from dotenv import load_dotenv
 from langdetect import detect, LangDetectException
 from datetime import datetime, timezone
-from pymongo.errors import BulkWriteError # pas encore utilisé
 import psycopg2
 from psycopg2.extras import execute_batch
 
-
 load_dotenv()
 
-# On récupère les id
 BLUESKY_HANDLE = os.getenv("BLUESKY_HANDLE")
 BLUESKY_PASSWORD = os.getenv("BLUESKY_PASSWORD")
 
 BASE_URL = "https://bsky.social/xrpc"
 
+
 def create_session():
     if not BLUESKY_HANDLE or not BLUESKY_PASSWORD:
         raise EnvironmentError(
-        "Variables BLUESKY_HANDLE ou BLUESKY_PASSWORD manquantes")
+            "Variables BLUESKY_HANDLE ou BLUESKY_PASSWORD manquantes"
+        )
 
     url = f"{BASE_URL}/com.atproto.server.createSession"
     payload = {
         "identifier": BLUESKY_HANDLE,
-        "password": BLUESKY_PASSWORD
+        "password": BLUESKY_PASSWORD,
     }
-    
-    # Gestion d'erreurs
+
     try:
         response = requests.post(url, json=payload, timeout=10)
         response.raise_for_status()
@@ -35,26 +33,31 @@ def create_session():
     except requests.exceptions.RequestException as e:
         raise SystemExit(f"Erreur authentification Bluesky : {e}")
 
-def search_posts(query="fake news", limit=50, max_pages=3):
+
+def search_posts(access_token, query="fake news", limit=50, max_pages=3):
     all_posts = []
     cursor = None
-    # Pagination pour avoir le plus de post possible (pas que les récents) et max_pages pour empêcher les abus (Green IT)
+    # Pagination pour avoir le plus de posts possible et max_pages pour limiter les appels (Green IT)
     for _ in range(max_pages):
         params = {
             "q": query,
             "limit": limit,
-            "cursor": cursor
+            "cursor": cursor,
         }
 
-        response = requests.get(
-            f"{BASE_URL}/app.bsky.feed.searchPosts",
-            headers={"Authorization": f"Bearer {ACCESS_TOKEN}"},
-            params=params,
-            timeout=10
-        )
-        response.raise_for_status()
-        data = response.json()
+        try:
+            response = requests.get(
+                f"{BASE_URL}/app.bsky.feed.searchPosts",
+                headers={"Authorization": f"Bearer {access_token}"},
+                params=params,
+                timeout=10,
+            )
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            print(f"Erreur lors de la collecte (page ignoree) : {e}")
+            break
 
+        data = response.json()
         posts = data.get("posts", [])
         all_posts.extend(posts)
 
@@ -63,6 +66,7 @@ def search_posts(query="fake news", limit=50, max_pages=3):
             break
 
     return all_posts
+
 
 def filter_language(posts, allowed=("fr", "en")):
     filtered = []
@@ -79,8 +83,8 @@ def filter_language(posts, allowed=("fr", "en")):
                     "author": post["author"]["handle"],
                     "text": text,
                     "lang": lang,
-                    "created_at": post["record"]["createdAt"], 
-                    "ingested_at": ingested_at,                
+                    "created_at": post["record"]["createdAt"],
+                    "ingested_at": ingested_at,
                     "like_count": post.get("likeCount", 0),
                     "repost_count": post.get("repostCount", 0),
                     "reply_count": post.get("replyCount", 0),
@@ -91,8 +95,10 @@ def filter_language(posts, allowed=("fr", "en")):
 
     return filtered
 
+
 def store_posts(posts, conn):
     if not posts:
+        print("Aucun post a inserer.")
         return
 
     query = """
@@ -111,42 +117,49 @@ def store_posts(posts, conn):
         ON CONFLICT (uri) DO NOTHING;
     """
 
-    with conn.cursor() as cursor:
-        execute_batch(cursor, query, posts)
-        conn.commit()
+    try:
+        with conn.cursor() as cur:
+            execute_batch(cur, query, posts)
+            conn.commit()
+        print(f"{len(posts)} posts traites (doublons ignores)")
+    except psycopg2.Error as e:
+        conn.rollback()
+        print(f"Erreur lors de l'insertion en base : {e}")
 
-    print(f"{len(posts)} posts traités (doublons ignorés)")
 
 def init_bluesky_session():
     session = create_session()
     return session["accessJwt"]
 
+
 def init_postgres():
     conn = psycopg2.connect(
-        host="localhost",
-        port=5432,
-        dbname="fake_news_project",
-        user="postgres",
-        password="16122003"
+        host=os.getenv("POSTGRES_HOST", "localhost"),
+        port=int(os.getenv("POSTGRES_PORT", "5432")),
+        dbname=os.getenv("POSTGRES_DB", "fake_news_project"),
+        user=os.getenv("POSTGRES_USER"),
+        password=os.getenv("POSTGRES_PASSWORD"),
     )
     return conn
 
 
+def run_pipeline(access_token, conn):
+    print("Demarrage de la collecte...")
 
-def run_pipeline(conn):
-    raw_posts = search_posts(
-        query="fake news",
-        limit=50,
-        max_pages=3
-    )
+    raw_posts = search_posts(access_token, query="fake news", limit=50, max_pages=3)
+    print(f"{len(raw_posts)} posts bruts collectes")
 
     clean_posts = filter_language(raw_posts)
-    store_posts(clean_posts, conn)
+    print(f"{len(clean_posts)} posts apres filtrage FR/EN")
 
-    print("Pipeline terminé avec succès")
+    store_posts(clean_posts, conn)
+    print("Pipeline termine avec succes")
+
 
 if __name__ == "__main__":
-    ACCESS_TOKEN = init_bluesky_session()
+    token = init_bluesky_session()
     conn = init_postgres()
-    run_pipeline(conn)
-    conn.close()
+    try:
+        run_pipeline(token, conn)
+    finally:
+        conn.close()
